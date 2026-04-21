@@ -19,6 +19,28 @@ Verify installation
 ffmpeg -version
 yt-dlp --version
 
+Setup Cookies (IMPORTANT)
+    Some YouTube videos require login and will fail with:
+
+Sign in to confirm you’re not a bot
+    Recommended solution: Use Chrome extension
+    Install Chrome extension:
+        Get cookies.txt LOCALLY
+        Open YouTube and make sure you're logged in
+        Click the extension → click Export
+        Save the file as:
+        cookies.txt
+
+        Place it in your project root:
+        project/
+        ├── youtube.py
+        ├── cookies.txt 
+        └── clips/
+
+When to refresh cookies
+    Re-export cookies if:
+        Downloads fail suddenly
+        You see bot/authentication errors again
 
 using CMD : 
 Run the script with a video ID:

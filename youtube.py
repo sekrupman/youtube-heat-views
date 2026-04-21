@@ -287,11 +287,26 @@ def download_video(video_id):
         "-f", "137+140",
         "--merge-output-format", "mp4",
         "--no-cache-dir",
+        "--cookies", "cookies.txt",
+        "--user-agent", "Mozilla/5.0",
         "-o", f"{video_id}.%(ext)s",
         url
     ]
 
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        print("[WARN] Cookies failed, retrying without cookies...")
+
+        fallback_cmd = [
+            "yt-dlp",
+            "-f", "137+140",
+            "--merge-output-format", "mp4",
+            "-o", f"{video_id}.%(ext)s",
+            url
+        ]
+
+        subprocess.run(fallback_cmd, check=True)
 
     return output
 
