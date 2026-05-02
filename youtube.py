@@ -1,3 +1,7 @@
+from http.client import HTTPException
+from unittest import result
+from urllib import request
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -7,7 +11,12 @@ import re
 import json
 import sys
 import time
-sys.stdout.reconfigure(encoding='utf-8')
+import shutil
+import uuid
+import glob
+
+sys.stdout.reconfigure(encoding="utf-8")
+
 
 # progress tracker
 class Progress:
@@ -28,8 +37,7 @@ class Progress:
 progress = Progress()
 
 def fail(step, message):
-    print(f"[ERROR:{step}] {message}", file=sys.stderr, flush=True)
-    sys.exit(1)
+    raise Exception(f"[{step}] {message}")
 
 
 # step 1: fetch HTML
@@ -79,13 +87,15 @@ def find_heatmap(video_id):
     # 1. Extract markers from HTML
     # ----------------------------
     match = re.search(
-        r'"markers":\s*(\[.*?\])\s*,\s*"?markersMetadata"?',
-        html,
-        re.DOTALL
+        r'"markers":\s*(\[.*?\])\s*,\s*"?markersMetadata"?', html, re.DOTALL
     )
+    print(f"match: {match}")
 
     if not match:
-        fail("HEATMAP", "No heatmap markers found (video may not have most replayed data)")
+        fail(
+            "HEATMAP",
+            "No heatmap markers found (video may not have most replayed data)",
+        )
 
     try:
         markers = json.loads(match.group(1).replace('\\"', '"'))
@@ -101,11 +111,13 @@ def find_heatmap(video_id):
         marker = marker.get("heatMarkerRenderer", marker)
 
         try:
-            segments.append({
-                "start": float(marker["startMillis"]) / 1000,
-                "duration": float(marker["durationMillis"]) / 1000,
-                "score": float(marker.get("intensityScoreNormalized", 0))
-            })
+            segments.append(
+                {
+                    "start": float(marker["startMillis"]) / 1000,
+                    "duration": float(marker["durationMillis"]) / 1000,
+                    "score": float(marker.get("intensityScoreNormalized", 0)),
+                }
+            )
         except Exception:
             continue
 
@@ -135,8 +147,7 @@ def find_heatmap(video_id):
 
             if seg["start"] <= prev["start"] + prev["duration"] + gap_threshold:
                 end_time = max(
-                    prev["start"] + prev["duration"],
-                    seg["start"] + seg["duration"]
+                    prev["start"] + prev["duration"], seg["start"] + seg["duration"]
                 )
 
                 prev["duration"] = end_time - prev["start"]
@@ -158,11 +169,9 @@ def find_heatmap(video_id):
             start = max(0, seg["start"] - padding)
             duration = min(seg["duration"] + padding * 2, max_duration)
 
-            results.append({
-                "start": start,
-                "duration": duration,
-                "score": seg["score"]
-            })
+            results.append(
+                {"start": start, "duration": duration, "score": seg["score"]}
+            )
 
         return results
 
@@ -178,33 +187,23 @@ def find_heatmap(video_id):
 
     return segments
 
-# fetch url 
+# fetch url
 def fetch_html(url):
-    session = requests.Session()
-
-    retries = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"]
-    )
-
-    session.mount("https://", HTTPAdapter(max_retries=retries))
-
     headers = {
         "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.youtube.com/",
     }
+    with open("cookies.txt", "r") as f:
+        cookies = {}
+        for line in f:
+            if not line.startswith("#") and line.strip():
+                parts = line.strip().split("\t")
+                if len(parts) >= 7:
+                    cookies[parts[5]] = parts[6]
 
-    try:
-        response = session.get(url, headers=headers, timeout=20)
-        response.raise_for_status()
-        return response.text
-
-    except Exception as e:
-        fail("NETWORK", str(e))
-
+    response = requests.get(url, headers=headers, cookies=cookies, timeout=20)
+    
+    return response.text
+    
 # step 4: normalize heatmap
 def normalize_heatmap(heatmap):
     progress.step("Normalizing heatmap...", 20)
@@ -217,10 +216,7 @@ def normalize_heatmap(heatmap):
         score = h["heatMarkerRenderer"]["heatMarkerIntensityScoreNormalized"]
         start = h["heatMarkerRenderer"]["timeRangeStartMillis"] / 1000
 
-        points.append({
-            "time": start,
-            "score": score
-        })
+        points.append({"time": start, "score": score})
 
         if score > max_score:
             max_score = score
@@ -243,7 +239,9 @@ def filter_peaks(points, video_id, threshold=0.7, min_gap=10):
     for i, p in enumerate(points, 1):
         if p["score"] >= threshold:
             if p["time"] - last_time >= min_gap:
-                p["url"] = f"https://www.youtube.com/watch?v={video_id}&t={int(p['time'])}s"
+                p["url"] = (
+                    f"https://www.youtube.com/watch?v={video_id}&t={int(p['time'])}s"
+                )
                 peaks.append(p)
                 last_time = p["time"]
 
@@ -275,22 +273,31 @@ def save_output(video_id, points, peaks):
 
     print(f"[SUCCESS] Saved to {filename}")
 
+
 # download full video
 def download_video(video_id):
+    full_dir = "full video"
+    os.makedirs(full_dir, exist_ok=True)
+    video_id = extract_video_id(video_id)
     url = f"https://www.youtube.com/watch?v={video_id}"
-    output = f"{video_id}.mp4"
+    output = os.path.join(full_dir, f"{video_id}.%(ext)s")
 
     print("[INFO] Downloading video (force 1080p)...")
 
     cmd = [
         "yt-dlp",
-        "-f", "137+140",
-        "--merge-output-format", "mp4",
+        "-f",
+        "bv*+ba/b",
+        "--merge-output-format",
+        "mp4",
         "--no-cache-dir",
-        "--cookies", "cookies.txt",
-        "--user-agent", "Mozilla/5.0",
-        "-o", f"{video_id}.%(ext)s",
-        url
+        "--cookies",
+        "cookies.txt",
+        "--user-agent",
+        "Mozilla/5.0",
+        "-o",
+        output,
+        url,
     ]
 
     try:
@@ -300,69 +307,156 @@ def download_video(video_id):
 
         fallback_cmd = [
             "yt-dlp",
-            "-f", "137+140",
-            "--merge-output-format", "mp4",
-            "-o", f"{video_id}.%(ext)s",
-            url
+            "-f",
+            "bv*+ba/b",
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            output,
+            url,
         ]
 
         subprocess.run(fallback_cmd, check=True)
 
-    return output
+    # return output
+    files = glob.glob(os.path.join(full_dir, f"{video_id}*.mp4"))
+    return files[0] if files else None
+
+# download section of video
+def download_video_section(video_id, start, end):
+    section_dir = "section"
+    os.makedirs(section_dir, exist_ok=True)
+    filename = f"{video_id}_{start.replace(':','-')}_{end.replace(':','-')}.mp4"
+    output_path = os.path.join(section_dir, filename)
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    print(f"[INFO] Downloading clip {start} - {end}...")
+
+    cmd = [
+        "yt-dlp",
+        "-f",
+        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+        "--merge-output-format",
+        "mp4",
+        "--no-cache-dir",
+        "--cookies",
+        "cookies.txt",
+        "--user-agent",
+        "Mozilla/5.0",
+        "--download-sections",
+        f"*{start}-{end}",
+        "-o",
+        output_path,
+        url,
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
+
+        if result.returncode != 0:
+            raise Exception(result.stderr)
+    except subprocess.CalledProcessError:
+        print("[WARN] Cookies failed, retrying without cookies...")
+
+        fallback_cmd = [
+            "yt-dlp",
+            "-f",
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+            "--merge-output-format",
+            "mp4",
+            "--download-sections",
+            f"*{start}-{end}",
+            "-o",
+            output,
+            url,
+        ]
+
+        subprocess.run(fallback_cmd, check=True)
+
+    return output_path
+
 
 # cut video per clip
 def generate_clips(video_path, segments):
+    # import os
+    # import shutil
+    # import uuid
+    # import time
+
     os.makedirs("clips", exist_ok=True)
+    os.makedirs("temp", exist_ok=True)
 
     for i, seg in enumerate(segments, start=1):
         start = seg["start"]
         duration = seg["duration"]
 
-        output_file = f"clips/clip_{i}_{int(start)}.mp4"
+        temp_input = f"temp/{uuid.uuid4().hex}.mp4"
+        output_file = f"clips/{uuid.uuid4().hex}_clip_{i}.mp4"
+
+        # copy source to avoid lock
+        shutil.copy(video_path, temp_input)
 
         cmd = [
             "ffmpeg",
             "-y",
-            "-i", video_path,
             "-ss", str(start),
+            "-i", temp_input,
             "-t", str(duration),
-
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "20",
             "-pix_fmt", "yuv420p",
-
             "-c:a", "aac",
             "-b:a", "192k",
-
             "-movflags", "+faststart",
-
-            output_file
+            output_file,
         ]
 
         print(f"[INFO] Creating clip {i} ({start}s)...")
 
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True)
+        finally:
+            # always cleanup temp
+            if os.path.exists(temp_input):
+                try:
+                    os.remove(temp_input)
+                except:
+                    pass
 
-# extrack video id
-def extract_video_id(input_str):
-    # full URL
-    match = re.search(r"v=([a-zA-Z0-9_-]{11})", input_str)
+        time.sleep(0.2)
+
+def extract_video_id(input_str: str) -> str:
+    if not input_str:
+        raise ValueError("Empty input")
+
+    input_str = input_str.strip()
+
+    # Full YouTube URL (watch)
+    match = re.search(r"[?&]v=([a-zA-Z0-9_-]{11})", input_str)
     if match:
         return match.group(1)
 
-    # short URL
+    # Short URL (youtu.be)
     match = re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", input_str)
     if match:
         return match.group(1)
 
-    # assume raw ID
-    if len(input_str) == 11:
+    # Shorts URL
+    match = re.search(r"youtube\.com/shorts/([a-zA-Z0-9_-]{11})", input_str)
+    if match:
+        return match.group(1)
+
+    # Raw ID (exact 11 chars)
+    if re.fullmatch(r"[a-zA-Z0-9_-]{11}", input_str):
         return input_str
 
-    return None
+    raise ValueError(f"Invalid YouTube video input: {input_str}")
 
-# main
+
+# main (CLI entry point)
 def main():
     if len(sys.argv) < 2:
         print("Usage:")

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Video Processor</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🎬 YouTube Video Processor</h1>
+        <p class="subtitle">
+          Download videos, generate clips, and process YouTube content
+        </p>
+      </header>
+
+      <main>
+        <!-- Tab Navigation -->
+        <div class="tabs">
+          <button class="tab-button active" data-tab="download-video">
+            Download Full Video
+          </button>
+          <button class="tab-button" data-tab="generate-clips">
+            Generate Clips
+          </button>
+          <button class="tab-button" data-tab="download-section">
+            Download Section
+          </button>
+          <button class="tab-button" data-tab="clips-list">View Clips</button>
+        </div>
+
+        <!-- Tab 1: Download Full Video -->
+        <div id="download-video" class="tab-content active">
+          <div class="form-card">
+            <h2>Download Full Video</h2>
+            <p class="description">
+              Download an entire YouTube video in high quality (1080p)
+            </p>
+
+            <form id="download-video-form">
+              <div class="form-group">
+                <label for="video-url">YouTube URL or Video ID</label>
+                <input
+                  type="text"
+                  id="video-url"
+                  name="video_url"
+                  placeholder="https://www.youtube.com/watch?v=... or dQw4w9WgXcQ"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn btn-primary">
+                Download Video
+              </button>
+            </form>
+
+            <div
+              id="download-video-status"
+              class="status-box"
+              style="display: none"
+            >
+              <div class="status-header">
+                <span class="status-title">Downloading...</span>
+                <span class="status-spinner">⏳</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"></div>
+              </div>
+              <div id="download-video-logs" class="logs"></div>
+            </div>
+
+            <div
+              id="download-video-result"
+              class="result-box"
+              style="display: none"
+            >
+              <div class="result-header success">✅ Success</div>
+              <div id="download-video-content" class="result-content"></div>
+            </div>
+
+            <div
+              id="download-video-error"
+              class="result-box error"
+              style="display: none"
+            >
+              <div class="result-header error">❌ Error</div>
+              <div
+                id="download-video-error-content"
+                class="result-content"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Generate Clips -->
+        <div id="generate-clips" class="tab-content">
+          <div class="form-card">
+            <h2>Generate Clips</h2>
+            <p class="description">
+              Generate clips from a video using YouTube heatmap data
+            </p>
+
+            <form id="generate-clips-form">
+              <div class="form-group">
+                <label for="video-path">Video File Path</label>
+                <input
+                  type="text"
+                  id="video-path"
+                  name="video_path"
+                  placeholder="path/to/video.mp4"
+                  required
+                />
+                <small>Example: dQw4w9WgXcQ.mp4</small>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                Generate Clips
+              </button>
+            </form>
+
+            <div
+              id="generate-clips-status"
+              class="status-box"
+              style="display: none"
+            >
+              <div class="status-header">
+                <span class="status-title">Generating clips...</span>
+                <span class="status-spinner">⏳</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"></div>
+              </div>
+              <div id="generate-clips-logs" class="logs"></div>
+            </div>
+
+            <div
+              id="generate-clips-result"
+              class="result-box"
+              style="display: none"
+            >
+              <div class="result-header success">✅ Success</div>
+              <div id="generate-clips-content" class="result-content"></div>
+            </div>
+
+            <div
+              id="generate-clips-error"
+              class="result-box error"
+              style="display: none"
+            >
+              <div class="result-header error">❌ Error</div>
+              <div
+                id="generate-clips-error-content"
+                class="result-content"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Download Section -->
+        <div id="download-section" class="tab-content">
+          <div class="form-card">
+            <h2>Download Video Section</h2>
+            <p class="description">
+              Download a specific time range from a YouTube video
+            </p>
+
+            <form id="download-section-form">
+              <div class="form-group">
+                <label for="section-video-url">YouTube URL or Video ID</label>
+                <input
+                  type="text"
+                  id="section-video-url"
+                  name="video_url"
+                  placeholder="https://www.youtube.com/watch?v=... or dQw4w9WgXcQ"
+                  required
+                />
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="start-time">Start Time</label>
+                  <input
+                    type="text"
+                    id="start-time"
+                    name="start_time"
+                    placeholder="HH:MM:SS or MM:SS"
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="end-time">End Time</label>
+                  <input
+                    type="text"
+                    id="end-time"
+                    name="end_time"
+                    placeholder="HH:MM:SS or MM:SS"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                Download Section
+              </button>
+            </form>
+
+            <div
+              id="download-section-status"
+              class="status-box"
+              style="display: none"
+            >
+              <div class="status-header">
+                <span class="status-title">Downloading section...</span>
+                <span class="status-spinner">⏳</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"></div>
+              </div>
+              <div id="download-section-logs" class="logs"></div>
+            </div>
+
+            <div
+              id="download-section-result"
+              class="result-box"
+              style="display: none"
+            >
+              <div class="result-header success">✅ Success</div>
+              <div id="download-section-content" class="result-content"></div>
+            </div>
+
+            <div
+              id="download-section-error"
+              class="result-box error"
+              style="display: none"
+            >
+              <div class="result-header error">❌ Error</div>
+              <div
+                id="download-section-error-content"
+                class="result-content"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: View Clips -->
+        <div id="clips-list" class="tab-content">
+          <div class="form-card">
+            <h2>Generated Clips</h2>
+            <p class="description">View all clips that have been generated</p>
+
+            <button id="refresh-clips-btn" class="btn btn-secondary">
+              🔄 Refresh List
+            </button>
+
+            <div id="clips-loading" class="status-box" style="display: none">
+              <div class="status-header">
+                <span class="status-title">Loading clips...</span>
+                <span class="status-spinner">⏳</span>
+              </div>
+            </div>
+
+            <div id="clips-container" class="clips-grid"></div>
+
+            <div id="no-clips" class="empty-state">
+              <p>
+                No clips generated yet. Use the "Generate Clips" tab to create
+                clips from a video.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer>
+        <p>YouTube Video Processor © 2024 | Built with FastAPI & FFmpeg</p>
+      </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+  </body>
+</html>
