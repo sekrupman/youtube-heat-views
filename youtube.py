@@ -369,7 +369,7 @@ def download_video_section(video_id, start, end):
             "--download-sections",
             f"*{start}-{end}",
             "-o",
-            output,
+            output_path,
             url,
         ]
 
